@@ -28,9 +28,6 @@ implicit none
 !----------------------------------------------------------------------------!
 ! Variables and allocatable arrays needed by the "ttm2f" subroutine         !
 !----------------------------------------------------------------------------!
-integer :: fO, lO, fH, lH, fM, lM, fO3, lO3, fH3, lH3, fM3, lM3
-integer :: Nw_old
-integer :: Nats, Natsd, Natsq
 !double precision, dimension(:,:), allocatable :: RM
 !double precision, dimension(:,:), allocatable :: dRM
 !double precision, dimension(:,:), allocatable :: DDT
@@ -46,31 +43,31 @@ Contains
 !***
 !***  allocate necessery arrays needed for the calculation of the potenial
 !***
-   subroutine init_ttm2f_params(Nw)
+   subroutine init_ttm2f_params(imodel, model)
 !   use ttm2f_mod
    implicit none
-   integer, intent(in) :: Nw
+   integer, intent(in) :: imodel
+   type(model_parameters), intent(out) :: model
    logical :: alloc
 
-   imodel=21
    if (imodel==2) then
-      vdwD=0.d0; vdwE=0.d0
+      model%vdwD=0.d0; model%vdwE=0.d0
    else if (imodel==21) then
-      vdwD=1.d13; vdwE=13.2d0
+      model%vdwD=1.d13; model%vdwE=13.2d0
    endif
-   vdwA=-1.329565985D+6
-   vdwB=3.632560798D+5
-   vdwC=-2.147141323D+3
-   aDD=0.3d0; aCCaCD=0.2d0
+   model%vdwA=-1.329565985D+6
+   model%vdwB=3.632560798D+5
+   model%vdwC=-2.147141323D+3
+   model%aDD=0.3d0; model%aCCaCD=0.2d0
 !   ........... polarizabilities
-   polarO=0.837d0
-   polarH = 0.496d0
-   polarM=0.837d0
-!   ...........   gammaM
-   gammaM=0.426706882d0
-   dms_param1=0.d0
-   dms_param2=0.d0
-   dms_param3=0.d0
+   model%polarO=0.837d0
+   model%polarH = 0.496d0
+   model%polarM=0.837d0
+!   ...........   model%gammaM
+   model%gammaM=0.426706882d0
+   model%dms_param1=0.d0
+   model%dms_param2=0.d0
+   model%dms_param3=0.d0
 
    end subroutine init_ttm2f_params
 
@@ -82,7 +79,8 @@ Contains
       integer :: fO, lO, fH, lH, fM, lM, fO3, lO3, fH3, lH3, fM3, lM3
       integer :: Nw_old
       integer :: Nats, Natsd, Natsq
-      call init_ttm2f_params(Nw)
+      type(model_parameters) :: model
+      call init_ttm2f_params(imodel, model)
       Natsq = 3*Nw       ! # of atoms with charge   (including M-sites)
       Natsd = 3*Nw       ! # of atoms with dipole   (including M-sites)
       Nats  = 4*Nw       ! # of total atoms         (including M-sites)
@@ -100,11 +98,11 @@ Contains
       fM3 = 3*fM-2  ! index on the x-comp. (out of the x,y,z) of the first M-site
       lM3 = 3*lM    ! index on the x-comp. (out of the x,y,z) of the last M-site
       call ttm2f_inner(Nw,RR,dRR,En, &
-              Natsq, Natsd, Nats, fO, lO, fH, lH, fM, lM, fO3, lO3, fH3, lH3, fM3, lM3, imodel)
+              Natsq, Natsd, Nats, fO, lO, fH, lH, fM, lM, fO3, lO3, fH3, lH3, fM3, lM3, imodel, model)
    end subroutine ttm2f
 
    subroutine ttm2f_inner(Nw,RR,dRR,En, &
-           Natsq, Natsd, Nats, fO, lO, fH, lH, fM, lM, fO3, lO3, fH3, lH3, fM3, lM3, imodel)
+           Natsq, Natsd, Nats, fO, lO, fH, lH, fM, lM, fO3, lO3, fH3, lH3, fM3, lM3, imodel, model)
    !** for a system of "Nw" water molecules returns the potential energy (En) and
    !** the derivatives of the energy wrt the atomic displacements (dRR).
    !** The coordinates of the atoms are found in the array "RR".
@@ -131,6 +129,7 @@ Contains
    double precision, dimension(3, 3*Nw), intent(out) :: dRR
    double precision, intent(out) :: En
    !
+   type(model_parameters), intent(in) :: model
    integer :: iter, i3, j3, isp, jsp, ix, iy, iw, jw, iat, jat, iO, iH1, iH2, iM
    double precision, dimension(3) :: Ri, Rij
    double precision, dimension(3,3) :: r1, dr1, dd3
@@ -161,6 +160,7 @@ Contains
    Eelec = 0.d0
    Eind = 0.d0
    Efq = 0.d0
+   charge = 0.d0
    phi = 0.d0
    ddt = 0.d0
    !-------------------------------------------------------------------------!
@@ -171,14 +171,14 @@ Contains
       iH1 = fH + 2*iw - 2
       iH2 = fH + 2*iw - 1
       iM  = fM + iw-1
-      RM(1:3,iM) = RR(1:3,iO)*(1.d0-gammaM) + &
-                              0.5d0*gammaM*( RR(1:3,iH1) + RR(1:3,iH2) )
+      RM(1:3,iM) = RR(1:3,iO)*(1.d0-model%gammaM) + &
+                              0.5d0*model%gammaM*( RR(1:3,iH1) + RR(1:3,iH2) )
    enddo
    !-------------------------------------------------------------------------!
    ! calculates the INTRA-molecular energy and Dipole Moment Surface         !
    !                     according the Partridge Sw  (JCP     )              !
    !-------------------------------------------------------------------------!
-   tmp = 0.5d0*gammaM/(1.d0-gammaM)
+   tmp = 0.5d0*model%gammaM/(1.d0-model%gammaM)
    do iw=1, Nw
       iO  = fO + iw-1
       iH1 = fH+2*iw-2
@@ -186,19 +186,19 @@ Contains
       iM  = fM + iw-1
       r1(1:3, 1:3) = RR(1:3, (/iO, iH1, iH2/) )
       call pot_nasa(r1, dr1, e1)
-      call dms_nasa(r1, q3, dq3)
+      call dms_nasa(r1, q3, dq3, model%dms_param1, model%dms_param2, model%dms_param3)
       Eint = Eint + e1
       dRR(1:3, (/iO,iH1,iH2/) ) = dr1
       !.... TTM2-F and TTM2.1-F have slightly different DMS.
       if (imodel==2) then
-         charge(iH1)  = q3(2) / (1.d0-gammaM)
-         charge(iH2)  = q3(3) / (1.d0-gammaM)
-         charge(iM )  = q3(1) / (1.d0-gammaM)
-         grdq(iw,:,:,:)= dq3(:,:,:) / (1.d0-gammaM)
+         charge(iH1)  = q3(2) / (1.d0-model%gammaM)
+         charge(iH2)  = q3(3) / (1.d0-model%gammaM)
+         charge(iM )  = q3(1) / (1.d0-model%gammaM)
+         grdq(iw,:,:,:)= dq3(:,:,:) / (1.d0-model%gammaM)
       else if (imodel==21) then
          charge(iH1)  = q3(2)+tmp*(q3(2)+q3(3) )
          charge(iH2)  = q3(3)+tmp*(q3(2)+q3(3) )
-         charge(iM )  = q3(1) / (1.d0-gammaM)
+         charge(iM )  = q3(1) / (1.d0-model%gammaM)
 
          grdq(iw,1,1,:)= dq3(1,1,:) + tmp*(dq3(1,1,:)+dq3(1,2,:))
          grdq(iw,2,1,:)= dq3(2,1,:) + tmp*(dq3(2,1,:)+dq3(2,2,:))
@@ -221,7 +221,7 @@ Contains
    do iw=1, Nw-1
       do jw=iw+1, Nw
          !Oxygen-Oxygen interactions
-         pol12 = polarO**2
+         pol12 = model%polarO**2
          iat=fO+iw-1          ! iat=Oxygen-1
          jat=fO+jw-1          ! jat=Oxygen-2
          Rij=RR(:,iat) - RR(:,jat)
@@ -231,14 +231,14 @@ Contains
          dR6 = dRijsq**3
          dR10=dR6*dRijsq*dRijsq
          dR12=dR6*dR6
-         expon = vdwD*dexp(-vdwE*dRij)
-         Evdw = Evdw + vdwA/dR12 + vdwB/dR10 + vdwC/dR6 + expon
-         tmp=-(12.d0*vdwA/dR12+10.d0*vdwB/dR10+6.d0*vdwC/dR6)/dRijsq &
-                                                             -vdwE*expon/dRij
+         expon = model%vdwD*dexp(-model%vdwE*dRij)
+         Evdw = Evdw + model%vdwA/dR12 + model%vdwB/dR10 + model%vdwC/dR6 + expon
+         tmp=-(12.d0*model%vdwA/dR12+10.d0*model%vdwB/dR10+6.d0*model%vdwC/dR6)/dRijsq &
+                                                             -model%vdwE*expon/dRij
          dRR(:,iat) = dRR(:,iat) + tmp * Rij
          dRR(:,jat) = dRR(:,jat) - tmp * Rij
          !Hydrogen-Hydrogen interactions
-         pol12 = polarH**2
+         pol12 = model%polarH**2
          do isp=1, 2
             iat=fH+2*(iw-1)+ isp-1   ! iat=Hydrogen-1A/Hydrogen-1B
             Ri = RR(1:3, iat)
@@ -246,7 +246,7 @@ Contains
                jat=fH+2*(jw-1)+ jsp-1   ! jat=Hydrogen-2A/Hydrogen-2B
                Rij = Ri - RR(1:3, jat)
                dRijsq=Rij(1)*Rij(1) + Rij(2)*Rij(2) + Rij(3)*Rij(3)
-               call smear01(dRijsq, pol12, aCCaCD, ts0, ts1)
+               call smear01(dRijsq, pol12, model%aCCaCD, ts0, ts1)
                phi(iat) = phi(iat) + ts0*charge(jat)
                phi(jat) = phi(jat) + ts0*charge(iat)
                Efq(3*iat-2:3*iat) = Efq(3*iat-2:3*iat) + ts1*charge(jat)*Rij
@@ -254,12 +254,12 @@ Contains
             enddo
          enddo
          !Msite-Msite interactions
-         pol12 = polarM**2
+         pol12 = model%polarM**2
          iat=fM+iw-1          ! iat=Msite-1
          jat=fM+jw-1          ! jat=Msite-2
          Rij=RM(:,iat) - RM(:,jat)
          dRijsq=Rij(1)*Rij(1) + Rij(2)*Rij(2) + Rij(3)*Rij(3)
-         call smear01(dRijsq, pol12, aCCaCD, ts0, ts1)
+         call smear01(dRijsq, pol12, model%aCCaCD, ts0, ts1)
          phi(iat) = phi(iat) + ts0*charge(jat)
          phi(jat) = phi(jat) + ts0*charge(iat)
          Efq(3*iat-2:3*iat) = Efq(3*iat-2:3*iat) + ts1*charge(jat)*Rij
@@ -274,32 +274,32 @@ Contains
          if (iw/=jw) then
             !Oxygen-Hydrogen interactions
             iat=fO + iw-1
-            pol12 = polarO*polarH
+            pol12 = model%polarO*model%polarH
             Ri = RR(1:3, iat)
             do jsp=1, 2
                jat=fH+2*(jw-1) + jsp-1
                Rij = Ri - RR(1:3, jat)
                dRijsq=Rij(1)*Rij(1) + Rij(2)*Rij(2) + Rij(3)*Rij(3)
-               call smear1(dRijsq, pol12, aCCaCD, ts1)
+               call smear1(dRijsq, pol12, model%aCCaCD, ts1)
                Efq(3*iat-2:3*iat) = Efq(3*iat-2:3*iat) + ts1*charge(jat)*Rij
             enddo
             !Oxygen-Msite    interactions
-            pol12 = polarO*polarM
+            pol12 = model%polarO*model%polarM
             iat=fO + iw-1    ! iat=Oxygen
             jat=fM + jw-1    ! jat=Msite
             Rij=RR(:,iat) - RM(:,jat)
             dRijsq=Rij(1)*Rij(1) + Rij(2)*Rij(2) + Rij(3)*Rij(3)
-            call smear1(dRijsq, pol12, aCCaCD, ts1)
+            call smear1(dRijsq, pol12, model%aCCaCD, ts1)
             Efq(3*iat-2:3*iat) = Efq(3*iat-2:3*iat) + ts1*charge(jat)*Rij
             !Hydrogen-Msite interactions
             iat = fM + iw -1   ! iat=Msite
-            pol12 = polarM*polarH
+            pol12 = model%polarM*model%polarH
             Ri = RM(1:3, iat)
             do jsp=1,2
                jat = fH+2*(jw-1) + jsp-1  !jat = hydrogen-2
                Rij = Ri - RR(1:3, jat)
                dRijsq=Rij(1)*Rij(1) + Rij(2)*Rij(2) + Rij(3)*Rij(3)
-               call smear01(dRijsq, pol12, aCCaCD, ts0, ts1)
+               call smear01(dRijsq, pol12, model%aCCaCD, ts0, ts1)
                phi(iat) = phi(iat) + ts0*charge(jat)
                phi(jat) = phi(jat) + ts0*charge(iat)
                Efq(3*iat-2:3*iat) = Efq(3*iat-2:3*iat) + ts1*charge(jat)*Rij
@@ -316,9 +316,9 @@ Contains
       i3=3*iat-2
       Ri = RR(:, iat)
       if (iat<fH) then
-         pol1 = polarO
+         pol1 = model%polarO
       else
-         pol1 = polarH
+         pol1 = model%polarH
       endif
       do jat=iat+1, lH
          j3=3*jat-2
@@ -326,11 +326,11 @@ Contains
          dRijsq=Rij(1)*Rij(1) + Rij(2)*Rij(2) + Rij(3)*Rij(3)
 
          if (jat<fH) then
-            pol12 = polarO*pol1
+            pol12 = model%polarO*pol1
          else
-            pol12 = polarH*pol1
+            pol12 = model%polarH*pol1
          endif
-         call smear2(dRijsq, pol12, aDD, ts1, ts2)
+         call smear2(dRijsq, pol12, model%aDD, ts1, ts2)
          dd3(1,1) = 3.d0*ts2*Rij(1)*Rij(1) - ts1
          dd3(2,2) = 3.d0*ts2*Rij(2)*Rij(2) - ts1
          dd3(3,3) = 3.d0*ts2*Rij(3)*Rij(3) - ts1
@@ -345,15 +345,15 @@ Contains
    !-------------------------------------------------------------------------!
    ! Calculate the induced Electric Field using an iterative proced.         !
    !-------------------------------------------------------------------------!
-   dip(fO3:lO3) = polarO*Efq(fO3:lO3)
-   dip(fH3:lH3) = polarH*Efq(fH3:lH3)
+   dip(fO3:lO3) = model%polarO*Efq(fO3:lO3)
+   dip(fH3:lH3) = model%polarH*Efq(fH3:lH3)
    pr_dip(fO3:lH3) = dip(fO3:lH3)   ! keep the previous dipole
 
    stath = DEBYE/CHARGECON/dsqrt(dble(Natsd))
    do iter=1, MAXITER
       Efd = matmul(ddt, dip)
-      dip(fO3:lO3) = polarO*( Efq(fO3:lO3) + Efd(fO3:lO3) )
-      dip(fH3:lH3) = polarH*( Efq(fH3:lH3) + Efd(fH3:lH3) )
+      dip(fO3:lO3) = model%polarO*( Efq(fO3:lO3) + Efd(fO3:lO3) )
+      dip(fH3:lH3) = model%polarH*( Efq(fH3:lH3) + Efd(fH3:lH3) )
       dip(fO3:lH3) = dmix*dip(fO3:lH3) + (1.d0-dmix)*pr_dip(fO3:lH3)
       deltadip = sum(  (dip(fO3:lH3)-pr_dip(fO3:lH3))**2  )
       deltadip = dsqrt(deltadip)*stath
@@ -388,12 +388,12 @@ Contains
    do iw=1, Nw-1
       do jw=iw+1, Nw
          !Oxygen-Oxygen interactions
-         pol12 = polarO**2
+         pol12 = model%polarO**2
          iat=fO+iw-1          ! iat=Oxygen-1
          jat=fO+jw-1          ! jat=Oxygen-2
          Rij=RR(:,iat) - RR(:,jat)
          dRijsq=Rij(1)*Rij(1) + Rij(2)*Rij(2) + Rij(3)*Rij(3)
-         call smear3(dRijsq, pol12, aDD, ts1, ts2, ts3)
+         call smear3(dRijsq, pol12, model%aDD, ts1, ts2, ts3)
          di = dip(3*iat-2:3*iat)  ! dipole-I
          dj = dip(3*jat-2:3*jat)  ! dipole-J
          didj = di(1)*dj(1) + di(2)*dj(2) + di(3)*dj(3)
@@ -403,7 +403,7 @@ Contains
          dRR(:,iat) = dRR(:,iat) + derij
          dRR(:,jat) = dRR(:,jat) - derij
          !Hydrogen-Hydrogen interactions
-         pol12 = polarH**2
+         pol12 = model%polarH**2
          do isp=1, 2
             iat=fH+2*(iw-1)+ isp-1   ! iat=Hydrogen-1A/Hydrogen-1B
             Ri = RR(1:3, iat)
@@ -415,12 +415,12 @@ Contains
                dj = dip(3*jat-2:3*jat)  ! dipole-J
                Rij = Ri - RR(1:3, jat)
                dRijsq=Rij(1)*Rij(1) + Rij(2)*Rij(2) + Rij(3)*Rij(3)
-               call smear3(dRijsq, pol12, aDD, ts1, ts2, ts3)
+               call smear3(dRijsq, pol12, model%aDD, ts1, ts2, ts3)
                didj = di(1)*dj(1)  + di(2)*dj(2)  + di(3)*dj(3)
                dir  = di(1)*Rij(1) + di(2)*Rij(2) + di(3)*Rij(3)
                djr  = dj(1)*Rij(1) + dj(2)*Rij(2) + dj(3)*Rij(3)
 
-               call smear2(dRijsq, pol12, aCCaCD, ts1C, ts2C)
+               call smear2(dRijsq, pol12, model%aCCaCD, ts1C, ts2C)
                derij=-3.d0*ts2*(didj*Rij+djr*di+dir*dj) + 15.d0*ts3*dir*djr*Rij
                derij=derij-3.d0*ts2C*qi*djr*Rij + ts1C*qi*dj
                derij=derij+3.d0*ts2C*qj*dir*Rij - ts1C*qj*di
@@ -437,7 +437,7 @@ Contains
          if (iw/=jw) then
             !Oxygen-Hydrogen interactions
             iat=fO + iw-1
-            pol12 = polarO*polarH
+            pol12 = model%polarO*model%polarH
             Ri = RR(1:3, iat)
             di = dip(3*iat-2:3*iat)  ! dipole-I
             do jsp=1, 2
@@ -446,12 +446,12 @@ Contains
                dj = dip(3*jat-2:3*jat)  ! dipole-J
                Rij = Ri - RR(1:3, jat)
                dRijsq=Rij(1)*Rij(1) + Rij(2)*Rij(2) + Rij(3)*Rij(3)
-               call smear3(dRijsq, pol12, aDD, ts1, ts2, ts3)
+               call smear3(dRijsq, pol12, model%aDD, ts1, ts2, ts3)
                didj = di(1)*dj(1)  + di(2)*dj(2)  + di(3)*dj(3)
                dir  = di(1)*Rij(1) + di(2)*Rij(2) + di(3)*Rij(3)
                djr  = dj(1)*Rij(1) + dj(2)*Rij(2) + dj(3)*Rij(3)
 
-               call smear2(dRijsq, pol12, aCCaCD, ts1C, ts2C)
+               call smear2(dRijsq, pol12, model%aCCaCD, ts1C, ts2C)
                derij=-3.d0*ts2*(didj*Rij+djr*di+dir*dj) + 15.d0*ts3*dir*djr*Rij
                derij=derij+3.d0*ts2C*qj*dir*Rij - ts1C*qj*di
                dRR(:,iat) = dRR(:,iat) + derij
@@ -459,7 +459,7 @@ Contains
                phi(jat) = phi(jat)-ts1C*dir
             enddo
             !Oxygen-Msite    interactions
-            pol12 = polarO*polarM
+            pol12 = model%polarO*model%polarM
             iat=fO + iw-1    ! iat=Oxygen
             di = dip(3*iat-2:3*iat)  ! dipole-I
             jat=fM + jw-1    ! jat=Msite
@@ -467,7 +467,7 @@ Contains
             Rij=RR(:,iat) - RM(:,jat)
             dRijsq=Rij(1)*Rij(1) + Rij(2)*Rij(2) + Rij(3)*Rij(3)
             dir  = di(1)*Rij(1) + di(2)*Rij(2) + di(3)*Rij(3)
-            call smear2(dRijsq, pol12, aCCaCD, ts1C, ts2C)
+            call smear2(dRijsq, pol12, model%aCCaCD, ts1C, ts2C)
             derij=3.d0*ts2C*qj*dir*Rij - ts1C*qj*di
             dRR(:,iat) = dRR(:,iat) + derij
             dRM(:,jat) = dRM(:,jat) - derij
@@ -475,7 +475,7 @@ Contains
             !Hydrogen-Msite interactions
             iat = fM + iw -1   ! iat=Msite
             qi = charge(iat)         ! charge-I
-            pol12 = polarM*polarH
+            pol12 = model%polarM*model%polarH
             Ri = RM(1:3, iat)
             do jsp=1,2
                jat = fH+2*(jw-1) + jsp-1  !jat = hydrogen-2
@@ -483,7 +483,7 @@ Contains
                dj = dip(3*jat-2:3*jat)  ! dipole-J
                Rij = Ri - RR(1:3, jat)
                dRijsq=Rij(1)*Rij(1) + Rij(2)*Rij(2) + Rij(3)*Rij(3)
-               call smear2(dRijsq, pol12, aCCaCD, ts1C, ts2C)
+               call smear2(dRijsq, pol12, model%aCCaCD, ts1C, ts2C)
                djr  = dj(1)*Rij(1) + dj(2)*Rij(2) + dj(3)*Rij(3)
                derij=-3.d0*ts2C*qi*djr*Rij + ts1C*qi*dj
                dRM(:,iat) = dRM(:,iat) + derij
@@ -492,7 +492,7 @@ Contains
             enddo
          else if (iw==jw) then   ! the intramol. dip-dip should be considered
             !...  Oxygen - Hydrogen, intramolecular interaction
-            pol12 = polarO*polarH
+            pol12 = model%polarO*model%polarH
             iat=fO+iw-1
             di = dip(3*iat-2:3*iat)  ! dipole-I
             Ri = RR(1:3, iat)
@@ -501,7 +501,7 @@ Contains
                dj = dip(3*jat-2:3*jat)  ! dipole-J
                Rij = Ri - RR(1:3, jat)
                dRijsq=Rij(1)*Rij(1) + Rij(2)*Rij(2) + Rij(3)*Rij(3)
-               call smear3(dRijsq, pol12, aDD, ts1, ts2, ts3)
+               call smear3(dRijsq, pol12, model%aDD, ts1, ts2, ts3)
                didj = di(1)*dj(1)  + di(2)*dj(2)  + di(3)*dj(3)
                dir  = di(1)*Rij(1) + di(2)*Rij(2) + di(3)*Rij(3)
                djr  = dj(1)*Rij(1) + dj(2)*Rij(2) + dj(3)*Rij(3)
@@ -510,7 +510,7 @@ Contains
                dRR(:,jat) = dRR(:,jat) - derij
             enddo
             !...  Hydrogen - Hydrogen, intramolecular interaction
-            pol12 = polarH**2
+            pol12 = model%polarH**2
             iat=fH+2*(iw-1)
             di = dip(3*iat-2:3*iat)  ! dipole-I
             Ri = RR(1:3, iat)
@@ -518,7 +518,7 @@ Contains
             dj = dip(3*jat-2:3*jat)  ! dipole-J
             Rij = Ri - RR(1:3, jat)
             dRijsq=Rij(1)*Rij(1) + Rij(2)*Rij(2) + Rij(3)*Rij(3)
-            call smear3(dRijsq, pol12, aDD, ts1, ts2, ts3)
+            call smear3(dRijsq, pol12, model%aDD, ts1, ts2, ts3)
             didj = di(1)*dj(1)  + di(2)*dj(2)  + di(3)*dj(3)
             dir  = di(1)*Rij(1) + di(2)*Rij(2) + di(3)*Rij(3)
             djr  = dj(1)*Rij(1) + dj(2)*Rij(2) + dj(3)*Rij(3)
@@ -549,9 +549,9 @@ Contains
       iH1 = fH + 2*iw-2
       iH2 = fH + 2*iw-1
       iM  = fM + iw-1
-      dRR(:,iH1) = dRR(:,iH1) +  0.5d0*gammaM*dRM(:,iM)
-      dRR(:,iH2) = dRR(:,iH2) +  0.5d0*gammaM*dRM(:,iM)
-      dRR(:, iO) = dRR(:, iO) + (1.d0-gammaM)*dRM(:,iM)
+      dRR(:,iH1) = dRR(:,iH1) +  0.5d0*model%gammaM*dRM(:,iM)
+      dRR(:,iH2) = dRR(:,iH2) +  0.5d0*model%gammaM*dRM(:,iM)
+      dRR(:, iO) = dRR(:, iO) + (1.d0-model%gammaM)*dRM(:,iM)
    enddo
   555 continue
    end subroutine ttm2f_inner

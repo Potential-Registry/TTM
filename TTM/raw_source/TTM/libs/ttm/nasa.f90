@@ -93,7 +93,7 @@ dr1 = dr1*.00285914375100642899d0
 
 end subroutine pot_nasa
 !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-subroutine dms_nasa(r1, q3, gradq)
+subroutine dms_nasa(r1, q3, gradq, dms_param1, dms_param2, dms_param3)
 !****
 !**** calculates the charges (q3) on the Oxygen and the Hydrogen sites that
 !**** reproduce the dipole moment surface  of a water monomer
@@ -104,8 +104,8 @@ subroutine dms_nasa(r1, q3, gradq)
 !**** added  by C. J. Burnham.
 !*** 
 use nasa_mod
-use model_mod
 implicit none
+double precision, intent(in) :: dms_param1, dms_param2, dms_param3
 double precision, dimension(3, 3) :: R1
 double precision, dimension(3):: q3
 double precision, dimension(3,3,3):: gradq

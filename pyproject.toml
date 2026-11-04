@@ -3,11 +3,11 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "LegacyMBPol"
+name = "TTM"
 authors = [
     {name = "Mark Boyer", email = "maboyer@tamu.edu"},
 ]
-description = "A legacy version of MB-Pol"
+description = "TTM2, TTM2.1, and TTM3 water potentials"
 readme = "README.md"
 requires-python = ">=3.8"
 keywords = []

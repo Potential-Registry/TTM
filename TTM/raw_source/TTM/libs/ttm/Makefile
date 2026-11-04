@@ -1,39 +1,26 @@
-FC=gfortran
-SRC=$(addprefix ./, \
-	model_mod.f90 \
-	ttm2f_mod.f90 \
-	ttm3f_mod.f90 \
-	nasa_mod.f90 \
-	math.f90 \
-	smear.f90 \
-	nasa.f90 \
-	dfpmin.f90)
-
-OBJ=$(addprefix ./, \
-	model_mod.o \
-	ttm2f_mod.o \
-	ttm3f_mod.o \
-	nasa_mod.o \
-	math.o \
-	smear.o \
-	nasa.o \
-	dfpmin.o)
-
-EXE=libttm.so
-
-FFLAGS=-O2 -fpic
-
-all: $(OBJ)
-	        $(FC) -shared -fpic $(FFLAGS) $(OBJ) $(INCLUDE_PATH) $(LIB_PATH) $(LIBSHDF) $(LIBS) -o $(EXE)
-	        cp libttm.so ../libttm.so
-
-$(OBJ) : Makefile
-
-%.o:%.f90
-	        $(FC) $(FFLAGS) $(DEFS) $(INCLUDE_PATH) -c $< -o $@
-%.o:%.F90
-	        $(FC) $(FFLAGS) $(DEFS) $(INCLUDE_PATH) -c $< -o $@
-
-
+FC = gfortran
+PYTHON = python3
+FFLAGS ?= -O2
+LDFLAGS ?= -shared
+# Required for thread-local local arrays; do not use -fno-automatic.
+REENTRANT_FLAGS = -fPIC -frecursive -ffree-line-length-none -ffixed-line-length-none
+BUILD = build
+EXE = ../libttm.so
+OBJECTS = $(BUILD)/model_mod.o $(BUILD)/nasa_mod.o $(BUILD)/math.o $(BUILD)/smear.o $(BUILD)/nasa.o $(BUILD)/dfpmin.o $(BUILD)/ttm2f_mod.o $(BUILD)/ttm3f_mod.o $(BUILD)/ctypes_interface.o
+.PHONY: all main clean
+all: $(EXE)
+main: all
+$(BUILD):
+	mkdir -p $@
+$(BUILD)/%.o: %.f90 | $(BUILD)
+	$(FC) $(FFLAGS) $(REENTRANT_FLAGS) -J$(BUILD) -I$(BUILD) -c $< -o $@
+$(BUILD)/%.o: %.f | $(BUILD)
+	$(FC) $(FFLAGS) $(REENTRANT_FLAGS) -J$(BUILD) -I$(BUILD) -c $< -o $@
+$(EXE): $(OBJECTS)
+	$(FC) $(LDFLAGS) -o $@ $(OBJECTS)
 clean:
-	rm -rf $(OBJ) *.o *.mod
+	rm -rf $(BUILD) $(EXE)
+$(BUILD)/nasa.o: $(BUILD)/model_mod.o $(BUILD)/nasa_mod.o
+$(BUILD)/ttm2f_mod.o: $(BUILD)/model_mod.o
+$(BUILD)/ttm3f_mod.o: $(BUILD)/model_mod.o
+$(BUILD)/ctypes_interface.o: $(BUILD)/ttm2f_mod.o $(BUILD)/ttm3f_mod.o

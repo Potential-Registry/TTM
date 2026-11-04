@@ -47,24 +47,24 @@ Contains
    !***
    !***  allocate necessery arrays needed for the calculation of the potenial
    !***
-   subroutine init_ttm3f(Nw)
+   subroutine init_ttm3f(model)
 !   use ttm3f_mod
    implicit none
-   integer, intent(in) :: Nw
+   type(model_parameters), intent(out) :: model
 
-   vdwC=-0.72298855D+03
-   vdwD=0.10211829D+06
-   vdwE=0.37170376D+01
-   aDD=0.175d0 
-   aCCaCD=0.175d0
-   polarM=1.444d0
-   polfacO=0.837d0
-   polfacH = 0.496d0
-   polfacM=0.837d0
-   dms_param1 =0.5d0
-   dms_param2 = 0.9578d0
-   dms_param3=0.012d0
-   gammaM=0.46d0
+   model%vdwC=-0.72298855D+03
+   model%vdwD=0.10211829D+06
+   model%vdwE=0.37170376D+01
+   model%aDD=0.175d0
+   model%aCCaCD=0.175d0
+   model%polarM=1.444d0
+   model%polfacO=0.837d0
+   model%polfacH = 0.496d0
+   model%polfacM=0.837d0
+   model%dms_param1 =0.5d0
+   model%dms_param2 = 0.9578d0
+   model%dms_param3=0.012d0
+   model%gammaM=0.46d0
    end subroutine init_ttm3f
 
    subroutine ttm3f(Nw,RR,dRR,En)
@@ -123,6 +123,7 @@ Contains
    integer, intent(in) :: fO, lO, fH, lH, fM, lM, fO3, lO3, fH3, lH3, fM3, lM3
    integer, intent(in) :: Nats, Natsd, Natsq
    !
+   type(model_parameters) :: model
    integer :: iter, i3, j3, isp, jsp, ix, iy, iw, jw, iat, jat, iO, iH1, iH2, iM
    double precision, dimension(3) :: Ri, Rij
    double precision, dimension(3,3) :: r1, dr1, dd3
@@ -147,7 +148,7 @@ Contains
    !-------------------------------------------------------------------------!
    ! initialize (if neccesary) some arrays, needed for following calculations!
    !-------------------------------------------------------------------------!
-   call init_ttm3f(Nw)
+   call init_ttm3f(model)
    dRR = 0.d0
    dRM = 0.d0
    Eint = 0.d0
@@ -155,6 +156,7 @@ Contains
    Eelec = 0.d0
    Eind = 0.d0
    Efq = 0.d0
+   charge = 0.d0
    phi = 0.d0
    ddt = 0.d0
    !-------------------------------------------------------------------------!
@@ -165,14 +167,14 @@ Contains
       iH1 = fH + 2*iw - 2
       iH2 = fH + 2*iw - 1
       iM  = fM + iw-1
-      RM(1:3,iM) = RR(1:3,iO)*(1.d0-gammaM) + &
-                              0.5d0*gammaM*( RR(1:3,iH1) + RR(1:3,iH2) )
+      RM(1:3,iM) = RR(1:3,iO)*(1.d0-model%gammaM) + &
+                              0.5d0*model%gammaM*( RR(1:3,iH1) + RR(1:3,iH2) )
    enddo
    !-------------------------------------------------------------------------!
    ! calculates the INTRA-molecular energy and Dipole Moment Surface         !
    !                     according the Partridge Sw  (JCP     )              !
    !-------------------------------------------------------------------------!
-   tmp = 0.5d0*gammaM/(1.d0-gammaM)
+   tmp = 0.5d0*model%gammaM/(1.d0-model%gammaM)
    do iw=1, Nw
       iO  = fO + iw-1
       iH1 = fH+2*iw-2
@@ -180,12 +182,12 @@ Contains
       iM  = fM + iw-1
       r1(1:3, 1:3) = RR(1:3, (/iO, iH1, iH2/) )
       call pot_nasa(r1, dr1, e1)
-      call dms_nasa(r1, q3, dq3)
+      call dms_nasa(r1, q3, dq3, model%dms_param1, model%dms_param2, model%dms_param3)
       Eint = Eint + e1
       dRR(1:3, (/iO,iH1,iH2/) ) = dr1
       charge(iH1)  = q3(2)+tmp*(q3(2)+q3(3) )
       charge(iH2)  = q3(3)+tmp*(q3(2)+q3(3) )
-      charge(iM )  = q3(1) / (1.d0-gammaM)
+      charge(iM )  = q3(1) / (1.d0-model%gammaM)
       grdq(iw,1,1,:)= dq3(1,1,:) + tmp*(dq3(1,1,:)+dq3(1,2,:))
       grdq(iw,2,1,:)= dq3(2,1,:) + tmp*(dq3(2,1,:)+dq3(2,2,:))
       grdq(iw,3,1,:)= dq3(3,1,:) + tmp*(dq3(3,1,:)+dq3(3,2,:))
@@ -215,9 +217,9 @@ Contains
          dR6 = dRijsq**3
          dR10=dR6*dRijsq*dRijsq
          dR12=dR6*dR6
-         expon = vdwD*dexp(-vdwE*dRij)
-         Evdw = Evdw + vdwC/dR6 + expon
-         tmp=-(6.d0*vdwC/dR6)/dRijsq -vdwE*expon/dRij
+         expon = model%vdwD*dexp(-model%vdwE*dRij)
+         Evdw = Evdw + model%vdwC/dR6 + expon
+         tmp=-(6.d0*model%vdwC/dR6)/dRijsq -model%vdwE*expon/dRij
          dRR(:,iat) = dRR(:,iat) + tmp * Rij
          dRR(:,jat) = dRR(:,jat) - tmp * Rij
          !Hydrogen-Hydrogen interactions
@@ -228,7 +230,7 @@ Contains
                jat=fH+2*(jw-1)+ jsp-1   ! jat=Hydrogen-2A/Hydrogen-2B
                Rij = Ri - RR(1:3, jat)
                dRijsq=Rij(1)*Rij(1) + Rij(2)*Rij(2) + Rij(3)*Rij(3)
-               call smear01(dRijsq, polfacH**2, aCCaCD, ts0, ts1)
+               call smear01(dRijsq, model%polfacH**2, model%aCCaCD, ts0, ts1)
                phi(iat) = phi(iat) + ts0*charge(jat)
                phi(jat) = phi(jat) + ts0*charge(iat)
                Efq(3*iat-2:3*iat) = Efq(3*iat-2:3*iat) + ts1*charge(jat)*Rij
@@ -240,7 +242,7 @@ Contains
          jat=fM+jw-1          ! jat=Msite-2
          Rij=RM(:,iat) - RM(:,jat)
          dRijsq=Rij(1)*Rij(1) + Rij(2)*Rij(2) + Rij(3)*Rij(3)
-         call smear01(dRijsq, polfacM**2, aCCaCD, ts0, ts1)
+         call smear01(dRijsq, model%polfacM**2, model%aCCaCD, ts0, ts1)
          phi(iat) = phi(iat) + ts0*charge(jat)
          phi(jat) = phi(jat) + ts0*charge(iat)
          Efq(3*iat-2:3*iat) = Efq(3*iat-2:3*iat) + ts1*charge(jat)*Rij
@@ -257,7 +259,7 @@ Contains
                jat = fH+2*(jw-1) + jsp-1  !jat = hydrogen-2
                Rij = Ri - RR(1:3, jat)
                dRijsq=Rij(1)*Rij(1) + Rij(2)*Rij(2) + Rij(3)*Rij(3)
-               call smear01(dRijsq, polfacH*polfacM, aCCaCD, ts0, ts1)
+               call smear01(dRijsq, model%polfacH*model%polfacM, model%aCCaCD, ts0, ts1)
                phi(iat) = phi(iat) + ts0*charge(jat)
                phi(jat) = phi(jat) + ts0*charge(iat)
                Efq(3*iat-2:3*iat) = Efq(3*iat-2:3*iat) + ts1*charge(jat)*Rij
@@ -277,7 +279,7 @@ Contains
          j3=3*jat-2
          Rij = Ri - RM(:, jat)
          dRijsq=Rij(1)*Rij(1) + Rij(2)*Rij(2) + Rij(3)*Rij(3)
-         call smear2(dRijsq, polfacM**2, aDD, ts1, ts2)
+         call smear2(dRijsq, model%polfacM**2, model%aDD, ts1, ts2)
          dd3(1,1) = 3.d0*ts2*Rij(1)*Rij(1) - ts1
          dd3(2,2) = 3.d0*ts2*Rij(2)*Rij(2) - ts1
          dd3(3,3) = 3.d0*ts2*Rij(3)*Rij(3) - ts1
@@ -292,13 +294,13 @@ Contains
    !-------------------------------------------------------------------------!
    ! Calculate the induced Electric Field using an iterative proced.         !
    !-------------------------------------------------------------------------!
-   dip(fM3:lM3) = polarM*Efq(fM3:lM3)
+   dip(fM3:lM3) = model%polarM*Efq(fM3:lM3)
    pr_dip(fM3:lM3) = dip(fM3:lM3)   ! keep the previous dipole
    
    stath = DEBYE/CHARGECON/dsqrt(dble(Natsd))
    do iter=1, MAXITER
       Efd = matmul(ddt, dip)
-      dip(fM3:lM3) = polarM*( Efq(fM3:lM3) + Efd(fM3:lM3) )
+      dip(fM3:lM3) = model%polarM*( Efq(fM3:lM3) + Efd(fM3:lM3) )
       dip(fM3:lM3) = dmix*dip(fM3:lM3) + (1.d0-dmix)*pr_dip(fM3:lM3)
       deltadip = sum(  (dip(fM3:lM3)-pr_dip(fM3:lM3))**2  )
       deltadip = dsqrt(deltadip)*stath
@@ -340,7 +342,7 @@ Contains
          jat=fM+jw-1          ! jat=Msite-2
          Rij=RM(:,iat) - RM(:,jat)
          dRijsq=Rij(1)*Rij(1) + Rij(2)*Rij(2) + Rij(3)*Rij(3)
-         call smear3(dRijsq, polfacM**2, aDD, ts1, ts2, ts3)
+         call smear3(dRijsq, model%polfacM**2, model%aDD, ts1, ts2, ts3)
          qi = charge(iat)
          qj = charge(jat)
          di = dip(3*iat-2:3*iat)  ! dipole-I
@@ -370,7 +372,7 @@ Contains
                qj = charge(jat)         ! charge-J
                Rij = Ri - RR(1:3, jat)
                dRijsq=Rij(1)*Rij(1) + Rij(2)*Rij(2) + Rij(3)*Rij(3)
-               call smear2(dRijsq, polfacH*polfacM, aCCaCD, ts1, ts2)
+               call smear2(dRijsq, model%polfacH*model%polfacM, model%aCCaCD, ts1, ts2)
                dir  = di(1)*Rij(1) + di(2)*Rij(2) + di(3)*Rij(3)
                derij=   3.d0*ts2*qj*dir*Rij - ts1*qj*di
                dRM(:,iat) = dRM(:,iat) + derij
@@ -401,9 +403,9 @@ Contains
       iH1 = fH + 2*iw-2
       iH2 = fH + 2*iw-1
       iM  = fM + iw-1
-      dRR(:,iH1) = dRR(:,iH1) +  0.5d0*gammaM*dRM(:,iM)
-      dRR(:,iH2) = dRR(:,iH2) +  0.5d0*gammaM*dRM(:,iM)
-      dRR(:, iO) = dRR(:, iO) + (1.d0-gammaM)*dRM(:,iM)
+      dRR(:,iH1) = dRR(:,iH1) +  0.5d0*model%gammaM*dRM(:,iM)
+      dRR(:,iH2) = dRR(:,iH2) +  0.5d0*model%gammaM*dRM(:,iM)
+      dRR(:, iO) = dRR(:, iO) + (1.d0-model%gammaM)*dRM(:,iM)
    enddo
    
    end subroutine ttm3f_inner

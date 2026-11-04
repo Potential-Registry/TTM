@@ -3,15 +3,15 @@
 !*** "H. Partridge and D. W. Schwenke, J. Chem. Phys. 106, 4618 (1997)"
 module nasa_mod
 implicit none
-integer, dimension(245,3) :: idx
-integer, dimension(84 ,3) :: idxD
-double precision, dimension(84) :: coefD
-double precision, dimension(245) :: c5zA, cbasis, ccore, crest
-integer, dimension(9,3) :: idxm
-double precision, dimension(9) :: cmass 
-double precision :: reoh,thetae,b1,roh,alphaoh,deohA,phh1A,phh2
-double precision :: f5z,fbasis,fcore,frest
-double precision :: a,b,c0,c1,c2,b1D
+integer, dimension(245,3), protected :: idx
+integer, dimension(84 ,3), protected :: idxD
+double precision, dimension(84), protected :: coefD
+double precision, dimension(245), protected :: c5zA, cbasis, ccore, crest
+integer, dimension(9,3), protected :: idxm
+double precision, dimension(9), protected :: cmass
+double precision, protected :: reoh,thetae,b1,roh,alphaoh,deohA,phh1A,phh2
+double precision, protected :: f5z,fbasis,fcore,frest
+double precision, protected :: a,b,c0,c1,c2,b1D
 data idx(:,1)/  &
        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2,  &
        2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,  &
